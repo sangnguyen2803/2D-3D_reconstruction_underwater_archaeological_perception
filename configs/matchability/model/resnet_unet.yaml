@@ -1,0 +1,4 @@
+kind: resnet_unet
+pretrained: torchvision.models.ResNet18_Weights.IMAGENET1K_V1
+weights_url: https://download.pytorch.org/models/resnet18-f37072fd.pth
+license_note: torchvision BSD-3-Clause code; ImageNet training-data terms also apply
