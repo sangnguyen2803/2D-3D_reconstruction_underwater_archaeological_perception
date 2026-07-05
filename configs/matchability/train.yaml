@@ -1,0 +1,12 @@
+crop_hw: [384, 512]
+encoder_lr: 0.00002
+head_lr: 0.0003
+weight_decay: 0.01
+gradient_clip: 1.0
+batch_size: 1
+accumulation: 4
+amp: true
+epochs: 4
+seeds: [42, 43, 44]
+selection: spatial_validation_AP
+calibration: validation_only_temperature
