@@ -1,0 +1,47 @@
+status: frozen_after_E0
+Q1:
+  metric: average_precision
+  comparison: strongest_baseline_including_tabular
+  minimum_positive_CI_folds: 2
+  spatial_folds: 3
+Q2:
+  metric: ece
+  maximum: 0.05
+  calibration_data: validation_only
+  report_each_fold: true
+Q3:
+  metric: average_precision
+  comparison: retrained_12_input_context_same_fold
+  minimum_positive_CI_folds: 2
+Q4:
+  budgets:
+  - 512
+  - 1024
+  - 2048
+  - 4096
+  comparisons:
+  - response
+  - random
+  metric: reference_compatible_match_recall
+Q5:
+  metric: ause
+  comparisons:
+  - retrained_v1_learner
+  - heuristic
+  require_CI_below_zero: true
+training_budget:
+  epochs: 4
+  seeds:
+  - 42
+  - 43
+  - 44
+  note: fixed initial fine-tuning budget; do not select hyperparameters using test
+    results
+bootstrap:
+  unit: image_or_pair_or_track
+  repeats: 500
+  confidence: 0.95
+frozen_at_utc: '2026-10-07T21:53:13.054210+00:00'
+label_audit_sha256: 4cf34938c0affd824cd63c089e8e0371a2abaa62228906a11ac4c742091580cf
+threshold_decision: Keep proposed 1.5/4 px, n_min=2, eligible minimum=15; threshold
+  sensitivity reported in E0
