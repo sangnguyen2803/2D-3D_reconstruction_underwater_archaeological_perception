@@ -14,12 +14,16 @@ neural = ["torch>=2.2", "torchvision>=0.17"]
 tracking = ["mlflow-skinny>=2.15"]
 visualization = ["open3d>=0.18", "plotly>=5"]
 dev = ["pytest>=8", "ruff>=0.6", "black>=24", "nbformat>=5", "nbclient>=0.10", "ipykernel>=6", "pandas>=2"]
-
 research = ["scikit-learn>=1.4,<2"]
 matchers = ["kornia>=0.8,<1", "lightglue @ git+https://github.com/cvg/LightGlue.git@eb42fee2d71449efb0aa5c10549752b5d75384d8"]
-
+semantic = ["torch>=2.2", "torchvision>=0.17", "transformers>=4.47,<5", "scikit-learn>=1.4,<2", "PyYAML>=6"]
+serving = ["fastapi>=0.115,<1", "uvicorn>=0.30", "python-multipart>=0.0.18", "onnx>=1.16,<2", "onnxruntime>=1.19", "httpx>=0.27"]
+detector = ["ultralytics>=8.3,<9"]
 matchability = ["torch>=2.2", "torchvision>=0.17", "transformers>=4.47,<5", "scikit-learn>=1.4,<2", "PyYAML>=6", "mlflow-skinny>=2.15", "joblib>=1.3"]
 onnx = ["onnx>=1.16,<2", "onnxruntime>=1.19"]
+
+[tool.setuptools.package-data]
+"underwater_vision.serving" = ["review.html"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
