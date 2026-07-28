@@ -1,0 +1,14 @@
+manifest: outputs/semantic_labels_v2/manifest.json
+gate: outputs/semantic_audit_v2/gate_review.json
+criteria: configs/semantic/criteria_v2.yaml
+model_config: configs/semantic/model/segformer_b0.yaml
+size: [384, 512]
+epochs: 40
+batch_size: 2
+gradient_accumulation: 4
+learning_rate: 0.00006
+weight_decay: 0.01
+label_smoothing: 0.05
+mixed_precision: true
+seed: 42
+tracking: false
