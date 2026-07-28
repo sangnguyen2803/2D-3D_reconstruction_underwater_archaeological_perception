@@ -1,0 +1,6 @@
+version: semantic_six_v2
+ignore_index: 255
+dynamic_id: 5
+classes: [sand_sediment, rock, statue, tile_artifacts, sessile_life, dynamic]
+merge_map: {}
+status: proposed_pending_gate_review

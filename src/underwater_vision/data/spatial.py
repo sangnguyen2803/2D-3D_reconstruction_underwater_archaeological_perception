@@ -6,6 +6,17 @@ from scipy.spatial import cKDTree
 
 def assign_spatial(points, specification):
     values = (np.asarray(points) - specification["origin"]) @ np.asarray(specification["axis"])
+    if specification.get("method") == "rotated_three_blocks_v2":
+        edges = np.asarray(specification["boundaries"])
+        block = np.digitize(values, edges)
+        fold = specification["fold"]
+        labels = np.where(
+            block == fold, "test", np.where(block == (fold + 1) % 3, "validation", "train")
+        )
+        labels[np.min(np.abs(values[:, None] - edges), axis=1) < specification["gap"] / 2] = (
+            "excluded"
+        )
+        return labels
     low, high = specification["test_interval"]
     boundary, gap = specification["validation_boundary"], specification["gap"]
     labels = np.full(len(values), "excluded", dtype="<U10")
