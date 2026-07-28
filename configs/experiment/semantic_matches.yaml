@@ -1,0 +1,21 @@
+# @package _global_
+experiment_name: semantic_matches_v2
+model:
+  extractor: sift_dinov2
+matching:
+  method: learned_filter
+  reliability: none
+  filter_checkpoint: outputs/semantic_filter_v2/context_v2.pt
+  pairing: window
+  retrieval_file: outputs/retrieval_v1/retrieval_v1.npz
+  retrieval_top_k: 12
+  evaluation_mode: true
+  semantic_features: compact
+  semantic_checkpoint: outputs/segformer_seed42_v2/segmentation_v2.pt
+  semantic_teacher_cache: null
+  dynamic_mask: false
+  dynamic_threshold: null
+reconstruction:
+  learned_confidence_checkpoint: null
+  semantic_confidence_checkpoint: null
+  semantic_voting: true
