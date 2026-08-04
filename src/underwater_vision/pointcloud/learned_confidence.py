@@ -20,7 +20,7 @@ CONFIDENCE_FEATURES = [
 ]
 
 
-def track_features(point, poses, xy, semantic, quality, K):
+def track_features(point, poses, xy, semantic, quality, K, matchability=None):
     centers = np.stack([p[:3, 3] for p in poses])
     rays = centers - point
     rays /= np.maximum(np.linalg.norm(rays, axis=1, keepdims=True), 1e-12)
@@ -52,10 +52,14 @@ def track_features(point, poses, xy, semantic, quality, K):
     heuristic = (
         (1 - np.exp(-(len(poses) - 1) / 3)) * np.exp(-fit / 2) * (1 - np.exp(-maximum / 5)) * q
     )
+    if matchability is not None:
+        if len(matchability) != len(poses):
+            raise ValueError("Track matchability must align with observed views")
+        x = np.r_[x, np.mean(matchability), np.min(matchability)].astype(np.float32)
     return x, float(heuristic)
 
 
-def holdout_observation(nodes, poses, xy, semantic, quality, K):
+def holdout_observation(nodes, poses, xy, semantic, quality, K, matchability=None):
     """Neither held-out xy, semantic nor quality enters predictor inputs."""
     if len(nodes) < 3:
         raise ValueError("Holdout error needs at least three views")
@@ -74,6 +78,7 @@ def holdout_observation(nodes, poses, xy, semantic, quality, K):
         np.asarray(semantic)[used],
         np.asarray(quality)[used],
         K,
+        np.asarray(matchability)[used] if matchability is not None else None,
     )
     if not np.isfinite(error) or not np.isfinite(x).all():
         raise ValueError("Invalid cheirality/geometry in holdout track")
