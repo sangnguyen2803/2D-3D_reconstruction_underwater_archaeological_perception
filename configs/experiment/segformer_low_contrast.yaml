@@ -1,0 +1,22 @@
+# @package _global_
+# Experimental: frozen RGB matchability ranks matches from contrast0.01 SIFT.
+# Existing v1 match classifiers are not applied to the changed detector.
+# Supply an image list in this checkpoint's held-out region.
+experiment_name: segformer_low_contrast_ranking_v1
+model:
+  extractor: sift_dinov2
+  contrast_threshold: 0.01
+matching:
+  method: learned_filter
+  reliability: none
+  filter_checkpoint: outputs/match_filter_v1/mlp_v1.pt
+  selection_policy: conservative_budget
+  ranking_source: matchability
+  match_retention: 0.9
+  minimum_matches: 128
+  matchability_features: off
+  matchability_checkpoint: outputs/segformer_folds_v3/segformer_b0_fold1_s42_v3/model_v3.pt
+  pairing: window
+  evaluation_mode: true
+reconstruction:
+  learned_confidence_checkpoint: null
