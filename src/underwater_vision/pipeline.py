@@ -139,6 +139,25 @@ def execute(cfg, output):
         write_json(output / "backbone.json", neural.provenance)
     elif model["extractor"] != "sift":
         raise ValueError("Supported extractors: sift, sift_dinov2")
+    from underwater_vision.visibility.source import validate_source_images
+
+    visibility_cfg = validate_source_images(
+        cfg.get("visibility", {}), [f.name for f in frames], matching.get("evaluation_mode", True)
+    )
+    matchability_provider = None
+    if visibility_cfg.get("source") == "matchability":
+        from underwater_vision.matchability.infer import MatchabilityPredictor
+
+        matchability_provider = MatchabilityPredictor(visibility_cfg["checkpoint"])
+        visibility_cfg["checkpoint_sha256"] = matchability_provider.checkpoint_hash
+        if matching.get("evaluation_mode", True):
+            from underwater_vision.matchability.protocol import check_evaluation
+
+            check_evaluation(
+                matchability_provider.metadata,
+                [f.name for f in frames],
+                matchability_provider.metadata["spatial_split"],
+            )
     for index, frame in enumerate(frames):
         image, _scale = resize_rgb(read_rgb(frame.path), data["max_size"], data["enhance"])
         write_rgb(image_dir / frame.name, image)
@@ -148,6 +167,9 @@ def execute(cfg, output):
             "version": 1,
             "revision": neural.provenance if neural else None,
         }
+        contrast_threshold = model.get("contrast_threshold", 0.04)
+        if contrast_threshold != 0.04:
+            settings["model"]["contrast_threshold"] = contrast_threshold
         key = fingerprint(frame.path, settings)
         feature_keys[frame.name] = key
         path = cache / "features" / (key + ".npz")
@@ -155,7 +177,7 @@ def execute(cfg, output):
             with np.load(path, allow_pickle=False) as z:
                 feat = {k: z[k] for k in z.files}
         else:
-            xy, descriptor = extract_sift(image, model["max_features"])
+            xy, descriptor = extract_sift(image, model["max_features"], contrast_threshold)
             feat = {"xy": xy, "local": descriptor}
             if neural:
                 feat["semantic"] = neural.extract(image, xy)
@@ -215,6 +237,27 @@ def execute(cfg, output):
                         feat["reliability"],
                         output / "figures" / (frame.path.stem + "_learned.png"),
                     )
+        if visibility_cfg.get("source"):
+            from underwater_vision.visibility.source import apply_source
+
+            if visibility_cfg["source"] == "handcrafted":
+                from underwater_vision.visibility.deterministic import (
+                    estimate_visibility,
+                    sample_map,
+                )
+
+                quality, _ = estimate_visibility(image, matching["quality_window"])
+                feat["quality"] = sample_map(quality, feat["xy"])
+            elif matchability_provider is not None:
+                from underwater_vision.matchability.infer import attach_matchability
+
+                feat["shape"] = np.asarray(image.shape[:2])
+                feat = attach_matchability(
+                    feat,
+                    matchability_provider.cached(frame.path, data["max_size"]),
+                    matchability_provider.checkpoint_hash,
+                )
+            feat = apply_source(feat, visibility_cfg["source"], visibility_cfg.get("checkpoint"))
         features[frame.name] = feat
         print(f'Features {index+1}/{len(frames)}: {frame.name} ({len(feat["xy"])})', flush=True)
     write_json(
@@ -239,6 +282,7 @@ def execute(cfg, output):
                     "a": feature_keys[a],
                     "b": feature_keys[b],
                     "matching": matching,
+                    "visibility": visibility_cfg,
                     "semantic_weight": model["semantic_weight"],
                     "seed": cfg["seed"],
                     "calibration": data["calibration"],
@@ -260,7 +304,9 @@ def execute(cfg, output):
                         np.sqrt(1 - alpha) * desc_b, np.sqrt(alpha) * fb["semantic"]
                     ].astype(np.float32)
                 pairs, local = match_local(desc_a, desc_b, matching["ratio"])
-                use_reliability = matching["reliability"] != "none"
+                use_reliability = matching["reliability"] != "none" or bool(
+                    visibility_cfg.get("source")
+                )
                 score = score_matches(
                     pairs,
                     local,

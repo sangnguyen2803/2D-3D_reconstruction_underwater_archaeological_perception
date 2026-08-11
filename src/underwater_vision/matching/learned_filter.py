@@ -21,10 +21,29 @@ FEATURE_NAMES = [
 ]
 
 
-def candidates(a, b, width, height):
+MATCHABILITY_FEATURE_NAMES = [
+    "matchability_a",
+    "matchability_b",
+    "matchability_min",
+    "matchability_mean",
+]
+
+
+def matchability_features(a, b, pairs):
+    ma, mb = a["matchability"][pairs[:, 0]], b["matchability"][pairs[:, 1]]
+    return np.c_[ma, mb, np.minimum(ma, mb), (ma + mb) / 2].astype(np.float32)
+
+
+def candidates(a, b, width, height, semantic_mode="off", matchability=False):
     """Retain top-1 candidates before ratio filtering, including hard negatives."""
+    if matchability and semantic_mode != "off":
+        raise ValueError(
+            "Matchability v3 and semantic v2 feature modes must be evaluated independently"
+        )
     if len(a["local"]) < 2 or len(b["local"]) < 2:
-        return np.empty((0, 2), np.uint32), np.empty((0, 12), np.float32)
+        channels = 12 if semantic_mode == "off" else 16 if semantic_mode == "compact" else 28
+        channels += 4 if matchability else 0
+        return np.empty((0, 2), np.uint32), np.empty((0, channels), np.float32)
     matcher = cv2.BFMatcher(cv2.NORM_L2)
     forward = matcher.knnMatch(a["local"], b["local"], k=2)
     reverse = matcher.match(b["local"], a["local"])
@@ -39,6 +58,12 @@ def candidates(a, b, width, height):
     qa = a["quality"][pairs[:, 0]]
     qb = b["quality"][pairs[:, 1]]
     x = np.c_[distance, ratio, mutual, cosine, qa, qb, xy_a, xy_b, xy_b - xy_a]
+    if semantic_mode != "off":
+        from underwater_vision.semantic.masks import match_class_features
+
+        x = np.c_[x, match_class_features(a, b, pairs, semantic_mode)]
+    if matchability:
+        x = np.c_[x, matchability_features(a, b, pairs)]
     return pairs, x.astype(np.float32)
 
 
@@ -74,10 +99,27 @@ class MatchFilter(nn.Module):
 
 
 class MatchPredictor:
-    def __init__(self, checkpoint):
+    def __init__(
+        self,
+        checkpoint,
+        semantic_mode="off",
+        segmentation_hash=None,
+        matchability=False,
+        matchability_hash=None,
+    ):
         self.metadata = torch.load(checkpoint, map_location="cpu", weights_only=True)
-        if self.metadata.get("feature_spec", "match_v1_12") != "match_v1_12":
+        version = self.metadata.get("feature_spec", "match_v1_12")
+        expected = "match_v1_12" if semantic_mode == "off" else f"match_class_v2_{semantic_mode}"
+        if matchability:
+            if semantic_mode != "off":
+                raise ValueError("Cannot combine semantic v2 and matchability v3 checkpoints")
+            expected = "match_matchability_v3_16"
+        if version != expected:
             raise ValueError("Match feature specification mismatch")
+        if semantic_mode != "off" and self.metadata.get("segmentation_hash") != segmentation_hash:
+            raise ValueError("Match segmentation checkpoint hash mismatch")
+        if matchability and self.metadata.get("matchability_hash") != matchability_hash:
+            raise ValueError("Match matchability checkpoint hash mismatch")
         self.model = MatchFilter(
             self.metadata["architecture"], channels=len(self.metadata["mean"])
         ).eval()
