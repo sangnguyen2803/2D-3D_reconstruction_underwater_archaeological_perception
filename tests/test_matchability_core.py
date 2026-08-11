@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import torch
 
 from underwater_vision.matchability.labels import (
     aggregate_labels,
@@ -9,6 +10,7 @@ from underwater_vision.matchability.labels import (
     same_slab_pairs,
     stronger_labels,
 )
+from underwater_vision.matchability.loss import resize_coordinates, sample_logits, sparse_bce
 from underwater_vision.matchability.protocol import check_evaluation, new_run
 
 
@@ -69,3 +71,32 @@ def test_v3_runs_are_immutable(tmp_path):
         new_run(path)
     with pytest.raises(ValueError):
         new_run(tmp_path / "bad")
+
+
+def test_sampling_opencv_centers_and_fractional_points():
+    values = torch.arange(12, dtype=torch.float32).reshape(1, 1, 3, 4)
+    xy = torch.tensor([[0.0, 0.0], [3.0, 2.0], [1.5, 1.0]])
+    assert torch.allclose(sample_logits(values, xy)[0], torch.tensor([0.0, 11.0, 5.5]), atol=1e-6)
+
+
+def test_resize_and_crop_alignment():
+    xy = torch.tensor([[10.0, 8.0]])
+    assert torch.allclose(resize_coordinates(xy, (20, 40), (40, 80)), torch.tensor([[20.5, 16.5]]))
+    cropped = xy - torch.tensor([4.0, 3.0])
+    ramp = torch.arange(400, dtype=torch.float32).reshape(1, 1, 20, 20)
+    assert torch.allclose(sample_logits(ramp[:, :, 3:, 4:], cropped), sample_logits(ramp, xy))
+
+
+def test_ignore_keypoints_have_zero_loss_gradient():
+    logits = torch.zeros(1, 1, 2, 2, requires_grad=True)
+    loss = sparse_bce(logits, torch.tensor([[0.0, 0.0], [1.0, 1.0]]), torch.tensor([-1.0, 1.0]))
+    loss.backward()
+    assert logits.grad[0, 0, 0, 0] == 0
+    assert logits.grad[0, 0, 1, 1] < 0
+
+
+def test_all_ignore_loss_can_backpropagate():
+    logits = torch.zeros(1, 1, 2, 2, requires_grad=True)
+    loss = sparse_bce(logits, torch.tensor([[0.0, 0.0]]), torch.tensor([-1.0]))
+    loss.backward()
+    assert loss == 0 and torch.count_nonzero(logits.grad) == 0
