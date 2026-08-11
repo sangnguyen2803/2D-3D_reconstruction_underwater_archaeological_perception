@@ -1,0 +1,18 @@
+# Model decision; independent of the frozen E0 criteria and training budget.
+primary_backbone: segformer_b0
+model_config: configs/matchability/model/segformer_b0.yaml
+selected_by: user
+selected_on: "2026-10-08"
+task: dense_matchability
+checkpoint:
+  path: outputs/matchability_suite_v3/segformer_b0_fold0_s42_v3/model_v3.pt
+  sha256: 0d15f3458008248c24677044a7d51de914561ef6145db184959d21a7f48fce7d
+  role: existing_fold0_seed42_exemplar
+evaluation:
+  status: completed_primary_model_E1_E3_three_folds_three_seeds
+  report: docs/segformer_folds_report_final_v3.md
+  comparison: outputs/segformer_folds_v3/comparison_v3/comparison_v3.json
+  dense_ranking_Q1: met_on_fold1_and_fold2
+  calibration: Q2_not_met_eight_of_nine_runs_exceed_ece_bound
+  downstream_benefit: unproven
+benchmark_state: primary_model_E1_E3_completed_downstream_incomplete
