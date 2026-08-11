@@ -1,0 +1,23 @@
+/.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+/data/
+/cache/
+/outputs/
+/mlruns/
+/tools/
+*.log
+.ipynb_checkpoints/
+
+# Local credentials and macOS metadata.
+.env
+.env.*
+!.env.example
+.DS_Store
+__MACOSX/
+
+# Dataset PDF inspection artifacts; keep source links in docs/dataset.md.
+/docs/dataset_page*.png
+/docs/*_source.txt
