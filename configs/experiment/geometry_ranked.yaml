@@ -1,0 +1,17 @@
+# @package _global_
+# Experimental tight-geometry ranking, separate from default threshold filtering.
+experiment_name: geometry_ranked_matches_v1
+model:
+  extractor: sift_dinov2
+matching:
+  method: learned_filter
+  reliability: none
+  # Context chosen over expanded MLP by the same spatial validation objective.
+  filter_checkpoint: outputs/geometry_context_expanded_v1/ranker_v1.pt
+  selection_policy: conservative_budget
+  match_retention: 0.9
+  minimum_matches: 128
+  pairing: window
+  evaluation_mode: true
+reconstruction:
+  learned_confidence_checkpoint: null
