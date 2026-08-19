@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY pyproject.toml /app/
+COPY src /app/src
+COPY scripts/serve_api.py /app/scripts/serve_api.py
+RUN pip install --no-cache-dir torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir --no-deps . \
+    && pip install --no-cache-dir 'numpy>=1.26,<3' scipy opencv-python-headless Pillow 'fastapi>=0.115,<1' uvicorn python-multipart onnxruntime
+EXPOSE 8000
+ENTRYPOINT ["python", "scripts/serve_api.py", "--task", "matchability", "--host", "0.0.0.0", "--onnx", "/models/matchability_v3.onnx", "--metadata", "/models/deployment_v3.json"]
