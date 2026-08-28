@@ -1,0 +1,13 @@
+verification_error: 2.0
+init_min_inliers: 50
+init_min_angle: 4.0
+min_model_size: 3
+refine_intrinsics: false
+threads: 4
+dense: false
+mesh: true
+dense_max_size: 960
+colmap_executable: colmap
+confidence_error_scale: 2.0
+confidence_angle_scale: 5.0
+confidence_support_scale: 3.0

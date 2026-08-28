@@ -1,0 +1,20 @@
+defaults:
+  - data: mermaid
+  - model: sift
+  - matching: default
+  - reconstruction: default
+  - experiment: classical
+  - _self_
+
+seed: 42
+output_root: outputs
+cache_root: cache
+run_name: null
+stage: all
+tracking: false
+hydra:
+  run:
+    dir: .
+  output_subdir: null
+  job:
+    chdir: false

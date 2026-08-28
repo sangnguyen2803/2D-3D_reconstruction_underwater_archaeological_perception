@@ -1,0 +1,6 @@
+# @package _global_
+experiment_name: neural
+model:
+  extractor: sift_dinov2
+matching:
+  reliability: none

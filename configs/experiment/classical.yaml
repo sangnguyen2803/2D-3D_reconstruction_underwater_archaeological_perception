@@ -1,0 +1,6 @@
+# @package _global_
+experiment_name: classical
+model:
+  extractor: sift
+matching:
+  reliability: none
