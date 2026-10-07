@@ -1,0 +1,10 @@
+window: 6
+ratio: 0.8
+min_score: 0.08
+ransac_threshold: 1.5
+ransac_iterations: 600
+reliability: none
+cross_view: false
+consistency_prior: 2.0
+learned_checkpoint: null
+quality_window: 15

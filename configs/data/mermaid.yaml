@@ -1,0 +1,20 @@
+root: data/raw/mermaid
+image_dir: null
+image_list: null
+start: 0
+count: 24
+stride: 2
+max_size: 960
+enhance: false
+calibration:
+  source: "SEANOE 107174.pdf, page 2 (auto-calibration; Brown convention assumption)"
+  width: 3840
+  height: 2880
+  f: 2334.29
+  cx_offset: -12.752
+  cy_offset: -16.6962
+  k1: -0.222446
+  k2: 0.310621
+  k3: -0.0835057
+  p1: -0.000995472
+  p2: -0.000078498
