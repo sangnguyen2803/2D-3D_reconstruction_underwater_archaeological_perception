@@ -41,7 +41,7 @@ class DinoExtractor:
         }
 
     @torch.inference_mode()
-    def extract(self, rgb, xy):
+    def _forward(self, rgb):
         h, w = rgb.shape[:2]
         tensor = torch.from_numpy(rgb.copy()).permute(2, 0, 1).float()[None] / 255
         tensor = tensor.to(self.device)
@@ -57,7 +57,19 @@ class DinoExtractor:
             else nullcontext()
         )
         with autocast:
-            patches = self.model.forward_features(tensor)["x_norm_patchtokens"]
+            tokens = self.model.forward_features(tensor)
+        return tokens, ph, pw
+
+    @torch.inference_mode()
+    def extract_global(self, rgb):
+        """Normalized CLS token for retrieval; no pose or match labels enter it."""
+        tokens, _, _ = self._forward(rgb)
+        return F.normalize(tokens["x_norm_clstoken"].float(), dim=1)[0].cpu().numpy()
+
+    @torch.inference_mode()
+    def extract(self, rgb, xy):
+        tokens, ph, pw = self._forward(rgb)
+        patches = tokens["x_norm_patchtokens"]
         channels = patches.shape[-1]
         grid = patches.reshape(1, ph // 14, pw // 14, channels).permute(0, 3, 1, 2).float()
         if len(xy) == 0:
