@@ -1,4 +1,4 @@
-# Visibility-Aware Underwater 2D–3D Reconstruction
+# Visibility-Aware Underwater 2Dâ€“3D Reconstruction
 
 A research pipeline for Mermaid underwater imagery: frozen DINOv2 patch features,
 local RootSIFT descriptors, visibility-weighted correspondence, geometric verification,
@@ -137,3 +137,13 @@ and dense clouds, camera paths, original RGB, and confidence colors.
 
 Further reading: [methodology](docs/methodology.md), [experiment protocol](docs/experiments.md),
 [limitations](docs/limitations.md), [dataset conventions](docs/dataset.md).
+
+
+## Reference-supervised extension
+
+The reference-supervised extension adds spatially separated match supervision,
+global DINO pair retrieval and held-out point-error prediction. The original
+pipeline stays the default; select `experiment=learned_matches` to use a trained
+filter. See [the extension overview](docs/v1_publication.md) for requirements,
+commands and the historical development findings. Results and checkpoints must
+be generated or supplied locally.

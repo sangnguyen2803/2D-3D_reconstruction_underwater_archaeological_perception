@@ -1,0 +1,14 @@
+# @package _global_
+experiment_name: learned_matches_v1
+model:
+  extractor: sift_dinov2
+matching:
+  method: learned_filter
+  reliability: none
+  filter_checkpoint: outputs/match_filter_v1/context_v1.pt
+  pairing: window
+  retrieval_file: outputs/retrieval_v1/retrieval_v1.npz
+  retrieval_top_k: 12
+  evaluation_mode: true
+reconstruction:
+  learned_confidence_checkpoint: null

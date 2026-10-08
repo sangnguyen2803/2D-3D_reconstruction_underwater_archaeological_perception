@@ -77,6 +77,10 @@ def run(config):
 
 
 def execute(cfg, output):
+    if cfg["matching"].get("method") == "learned_filter":
+        from underwater_vision.research_pipeline import execute_learned
+
+        return execute_learned(cfg, output)
     data, model, matching = cfg["data"], cfg["model"], cfg["matching"]
     dataset = MermaidDataset(data["root"], data["image_dir"])
     frames = dataset.select(data["start"], data["count"], data["stride"])
