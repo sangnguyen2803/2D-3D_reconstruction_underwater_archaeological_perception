@@ -15,6 +15,11 @@ tracking = ["mlflow-skinny>=2.15"]
 visualization = ["open3d>=0.18", "plotly>=5"]
 dev = ["pytest>=8", "ruff>=0.6", "black>=24", "nbformat>=5", "nbclient>=0.10", "ipykernel>=6", "pandas>=2"]
 
+research = ["scikit-learn>=1.4,<2"]
+matchers = ["kornia>=0.8,<1", "lightglue @ git+https://github.com/cvg/LightGlue.git@eb42fee2d71449efb0aa5c10549752b5d75384d8"]
+
+onnx = ["onnx>=1.16,<2", "onnxruntime>=1.19"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
