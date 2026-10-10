@@ -1,0 +1,11 @@
+spec: rootsift_reference_matchability_v3
+positive_px: 1.5
+negative_px: 4.0
+n_min: 2
+minimum_compatible_directed_candidates: 15
+window: 6
+retrieval_top_k: 12
+graph: hybrid
+variant: l1
+heldout_positive_px: 2.0
+preprocessing: {max_size: 960, requested_rootsift: 4096, clahe: false}
