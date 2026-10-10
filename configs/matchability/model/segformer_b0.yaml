@@ -1,0 +1,6 @@
+# Primary v3 dense matchability backbone selected by the user on 2026-10-08.
+# ResNet-UNet and DINO-conv remain available as optional comparison models.
+kind: segformer_b0
+pretrained: nvidia/mit-b0
+revision: 80983a413c30d36a39c20203974ae7807835e2b4
+license_note: NVIDIA SegFormer research/evaluation license; verify terms before public use
