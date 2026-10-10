@@ -20,6 +20,7 @@ from underwater_vision.matchability.labels import (
     stronger_labels,
 )
 from underwater_vision.matchability.loss import resize_coordinates, sample_logits, sparse_bce
+from underwater_vision.matchability.model import MatchabilityModel
 from underwater_vision.matchability.protocol import check_evaluation, new_run
 
 
@@ -177,3 +178,35 @@ def test_exact_bootstrap_with_small_score_range():
 def test_retention_averages_score_ties():
     result = metrics([1, 0, 1, 0], [0.5] * 4)
     assert result["retention"]["positive_recall"][0] == 0.25
+
+
+def test_segformer_one_channel_roundtrip_and_onnx(tmp_path):
+    ort = pytest.importorskip("onnxruntime")
+    cfg = {
+        "kind": "segformer_b0",
+        "hf_config": {
+            "depths": [1, 1, 1, 1],
+            "hidden_sizes": [8, 16, 32, 64],
+            "num_attention_heads": [1, 2, 4, 8],
+            "decoder_hidden_size": 16,
+        },
+    }
+    model = MatchabilityModel(cfg, pretrained=False).eval()
+    image = torch.rand(1, 3, 64, 64)
+    out = model(image)
+    assert out.shape == (1, 1, 64, 64)
+    path = tmp_path / "model.onnx"
+    torch.onnx.export(
+        model,
+        image,
+        str(path),
+        dynamo=False,
+        opset_version=17,
+        input_names=["rgb"],
+        output_names=["logits"],
+        dynamic_axes={"rgb": {0: "batch"}, "logits": {0: "batch"}},
+    )
+    session = ort.InferenceSession(str(path))
+    actual = session.run(None, {"rgb": image.numpy()})[0]
+    assert np.allclose(out.detach().numpy(), actual, atol=1e-4, rtol=1e-3)
+    assert session.run(None, {"rgb": np.repeat(image.numpy(), 2, 0)})[0].shape[0] == 2
