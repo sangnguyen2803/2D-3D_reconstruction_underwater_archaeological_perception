@@ -9,6 +9,7 @@ from underwater_vision.matchability.labels import (
     same_slab_pairs,
     stronger_labels,
 )
+from underwater_vision.matchability.protocol import check_evaluation, new_run
 
 
 def test_positive_override_n_min_and_ambiguous_ignore():
@@ -50,3 +51,21 @@ def test_no_split_straddling_pairs():
         ("a", "b"),
         ("d", "e"),
     ]
+
+
+def test_eval_leakage_and_outside_slab():
+    meta = {"training_images": ["a"], "validation_images": ["b"]}
+    split = {"groups": {"test": ["c"]}}
+    check_evaluation(meta, ["c"], split)
+    for name in ["a", "b", "d"]:
+        with pytest.raises(ValueError):
+            check_evaluation(meta, [name], split)
+
+
+def test_v3_runs_are_immutable(tmp_path):
+    path = tmp_path / "trial_v3"
+    new_run(path)
+    with pytest.raises(FileExistsError):
+        new_run(path)
+    with pytest.raises(ValueError):
+        new_run(tmp_path / "bad")
