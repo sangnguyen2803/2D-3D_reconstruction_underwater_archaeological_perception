@@ -210,3 +210,29 @@ def test_segformer_one_channel_roundtrip_and_onnx(tmp_path):
     actual = session.run(None, {"rgb": image.numpy()})[0]
     assert np.allclose(out.detach().numpy(), actual, atol=1e-4, rtol=1e-3)
     assert session.run(None, {"rgb": np.repeat(image.numpy(), 2, 0)})[0].shape[0] == 2
+
+
+def test_frozen_cache_preserves_fp32_values_strides_and_reuses_encoder(tmp_path, monkeypatch):
+    from underwater_vision.matchability.frozen_cache import FrozenEvaluationCache
+
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "image.png"
+    source.write_bytes(b"source state for fingerprint")
+
+    class Encoder:
+        specification = {"revision": "test"}
+        calls = 0
+
+        def frozen_grid(self, rgb):
+            self.calls += 1
+            return torch.arange(24, dtype=torch.float32).reshape(1, 2, 3, 4).permute(0, 3, 1, 2) / 7
+
+    encoder = Encoder()
+    cache = FrozenEvaluationCache(maximum_bytes=100_000)
+    first = cache.grid(encoder, torch.zeros(1, 3, 20, 20), source)
+    second = cache.grid(encoder, torch.zeros(1, 3, 20, 20), source)
+    assert encoder.calls == 1 and torch.equal(first, second)
+    assert first.stride() == second.stride() and second.dtype == torch.float32
+    source.write_bytes(b"changed source")
+    cache.grid(encoder, torch.zeros(1, 3, 20, 20), source)
+    assert encoder.calls == 2
