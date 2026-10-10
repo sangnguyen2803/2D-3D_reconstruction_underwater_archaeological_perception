@@ -6,10 +6,12 @@ import torch
 from scipy.special import expit
 from sklearn.metrics import average_precision_score
 
+from underwater_vision.evaluation.matchability import metrics, paired_ap_bootstrap
 from underwater_vision.matchability.calibration import (
     calibrated_probabilities,
     fit_platt,
     fit_temperature,
+    probabilities,
 )
 from underwater_vision.matchability.labels import (
     aggregate_labels,
@@ -136,3 +138,42 @@ def test_ignored_labels_and_invalid_calibrators():
         fit_platt([0, 1], [1, 1])
     with pytest.raises(ValueError):
         calibrated_probabilities(z, {"method": "positive_platt", "slope": -1, "intercept": 0})
+
+
+def test_metrics_exclude_ignore():
+    assert metrics([0, 1, -1], [0.1, 0.9, 0.5])["samples"] == 2
+
+
+def test_temperature_preserves_rank():
+    z, y = np.array([-2.0, 1.0, 3.0, -1.0]), np.array([0, 1, 1, 0])
+    t = fit_temperature(z, y)
+    assert t > 0
+    assert metrics(y, probabilities(z))["roc_auc"] == metrics(y, probabilities(z, t))["roc_auc"]
+
+
+def test_bootstrap_is_paired_and_clustered():
+    rows = [
+        {"labels": np.array([0, 1]), "good": np.array([0.1, 0.9]), "bad": np.array([0.9, 0.1])}
+        for _ in range(3)
+    ]
+    report = paired_ap_bootstrap(rows, "good", "bad", repeats=20)
+    assert report["clusters"] == 3
+    assert report["ci95"][0] > 0
+
+
+def test_exact_bootstrap_with_small_score_range():
+    rows = [
+        {
+            "labels": np.array([0, 1]),
+            "good": np.array([0.00001, 0.00002]),
+            "bad": np.array([0.00002, 0.00001]),
+        }
+        for _ in range(3)
+    ]
+    result = paired_ap_bootstrap(rows, "good", "bad", repeats=20)
+    assert np.allclose(result["ci95"], [0.5, 0.5])
+
+
+def test_retention_averages_score_ties():
+    result = metrics([1, 0, 1, 0], [0.5] * 4)
+    assert result["retention"]["positive_recall"][0] == 0.25
