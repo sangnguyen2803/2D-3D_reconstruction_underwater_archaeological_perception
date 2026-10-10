@@ -31,8 +31,9 @@ def load_head(path):
 
 
 @torch.inference_mode()
-def predict(features, path):
-    head, _ = load_head(path)
+def predict(features, path, calibrated=False):
+    head, metadata = load_head(path)
     if features.shape[1] != head.network[0].in_features:
         raise ValueError("Checkpoint and backbone feature dimensions do not agree")
-    return head.reliability(torch.from_numpy(features)).numpy().astype(np.float32)
+    temperature = metadata.get("temperature", 1) if calibrated else 1
+    return torch.sigmoid(head(torch.from_numpy(features)) / temperature).numpy().astype(np.float32)
