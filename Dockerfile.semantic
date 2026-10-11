@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY pyproject.toml /app/
+COPY src /app/src
+COPY scripts/serve_api.py /app/scripts/serve_api.py
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir --no-deps . \
+    && pip install --no-cache-dir numpy scipy opencv-python-headless Pillow 'transformers>=4.47,<5' 'fastapi>=0.115,<1' uvicorn python-multipart
+EXPOSE 8000
+ENTRYPOINT ["python", "scripts/serve_api.py", "--host", "0.0.0.0", "--device", "cpu", "--checkpoint", "/models/segmentation_v2.pt"]
