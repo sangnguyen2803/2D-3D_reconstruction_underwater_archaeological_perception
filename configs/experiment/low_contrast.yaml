@@ -1,0 +1,10 @@
+# @package _global_
+experiment_name: low_contrast_rootsift_v1
+model:
+  extractor: sift
+  contrast_threshold: 0.01
+matching:
+  reliability: none
+  cross_view: false
+data:
+  enhance: false
