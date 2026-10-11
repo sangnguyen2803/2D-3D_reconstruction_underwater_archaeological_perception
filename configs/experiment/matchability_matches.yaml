@@ -1,0 +1,20 @@
+# @package _global_
+experiment_name: matchability_matches_v3
+model:
+  extractor: sift_dinov2
+matching:
+  method: learned_filter
+  reliability: none
+  filter_checkpoint: outputs/matchability_suite_v3/filters_fold0_s42_v3/context_16_v3.pt
+  matchability_features: "on"
+  matchability_checkpoint: outputs/matchability_suite_v3/segformer_b0_fold0_s42_v3/model_v3.pt
+  pairing: window
+  evaluation_mode: true
+  keypoint_budget: null
+  keypoint_selection: matchability
+visibility:
+  source: handcrafted
+  checkpoint: null
+reconstruction:
+  learned_confidence_checkpoint: null
+  matchability_confidence_checkpoint: null

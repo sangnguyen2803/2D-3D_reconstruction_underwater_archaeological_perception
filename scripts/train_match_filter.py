@@ -39,7 +39,34 @@ def main():
     p.add_argument("--train-views", type=int, default=64)
     p.add_argument("--validation-views", type=int, default=32)
     p.add_argument("--epochs", type=int, default=20)
+    p.add_argument("--test-views", type=int, default=32)
+    p.add_argument("--matchability-features", choices=["off", "on"], default="off")
+    p.add_argument("--matchability-checkpoint", type=Path)
+    p.add_argument(
+        "--matchability-dataset", type=Path, default=Path("outputs/matchability_labels_v3")
+    )
+    p.add_argument("--protocol", default="fold0")
+    p.add_argument("--semantic-features", choices=["off", "compact", "full"], default="off")
+    p.add_argument("--semantic-checkpoint", type=Path)
+    p.add_argument("--base-matches", type=Path, default=Path("outputs/match_filter_v1"))
+    p.add_argument("--spatial-manifest", type=Path)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--version", choices=[1, 2], type=int, default=1)
     args = p.parse_args()
+    if args.matchability_features == "on":
+        from underwater_vision.matchability.experiments import train_filters
+
+        if not args.matchability_checkpoint or args.semantic_features != "off":
+            p.error("Matchability requires its checkpoint and semantic features off")
+        train_filters(args)
+        return
+    if args.semantic_features != "off" or args.version == 2:
+        from underwater_vision.semantic.experiments import train_semantic_matches
+
+        if args.output == Path("outputs/match_filter_v1"):
+            args.output = Path("outputs/semantic_filter_v2")
+        train_semantic_matches(args)
+        return
     if (
         json.loads((args.audit / "audit_v1.json").read_text())["status"]
         != "passed_proxy_sanity_check"

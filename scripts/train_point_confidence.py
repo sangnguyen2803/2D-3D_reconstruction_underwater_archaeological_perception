@@ -56,8 +56,29 @@ def main():
     p.add_argument("--output", type=Path, default=Path("outputs/point_confidence_v1"))
     p.add_argument("--matches", type=Path, default=Path("outputs/match_filter_v1"))
     p.add_argument("--epochs", type=int, default=150)
+    p.add_argument("--matchability-features", action="store_true")
+    p.add_argument("--matchability-checkpoint", type=Path)
     p.add_argument("--baseline", type=Path, default=Path("outputs/classical_eval"))
+    p.add_argument("--semantic-features", action="store_true")
+    p.add_argument("--semantic-checkpoint", type=Path)
+    p.add_argument("--robust-loss", choices=["huber", "student_t"], default="student_t")
+    p.add_argument("--conformal", action="store_true")
+    p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
+    if args.matchability_features:
+        from underwater_vision.matchability.confidence import train_confidence
+
+        if not args.matchability_checkpoint or args.semantic_features:
+            p.error("Point matchability requires its checkpoint and semantic features off")
+        train_confidence(args)
+        return
+    if args.semantic_features:
+        from underwater_vision.semantic.experiments import train_semantic_confidence
+
+        if args.output == Path("outputs/point_confidence_v1"):
+            args.output = Path("outputs/semantic_confidence_v2")
+        train_semantic_confidence(args)
+        return
     if (args.output / "evaluation_v1.json").exists():
         raise FileExistsError("Existing confidence results are immutable")
     args.output.mkdir(parents=True, exist_ok=True)
