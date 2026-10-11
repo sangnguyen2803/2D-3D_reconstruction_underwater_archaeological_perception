@@ -1,0 +1,4 @@
+kind: segformer
+pretrained: nvidia/mit-b0
+revision: 80983a413c30d36a39c20203974ae7807835e2b4
+classes: 6
