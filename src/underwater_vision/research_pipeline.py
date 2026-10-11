@@ -44,7 +44,47 @@ def execute_learned(cfg, output):
         frames = [lookup[n] for n in Path(data["image_list"]).read_text().splitlines() if n]
     if len(frames) < 3:
         raise ValueError("v1 SfM requires >=3 frames")
-    predictor = MatchPredictor(matching["filter_checkpoint"])
+    semantic_mode = matching.get("semantic_features", "off")
+    semantic_provider = None
+    if matching.get("semantic_checkpoint"):
+        from underwater_vision.semantic.infer import SemanticPredictor
+
+        semantic_provider = SemanticPredictor(matching["semantic_checkpoint"])
+    elif matching.get("semantic_teacher_cache"):
+        from underwater_vision.semantic.infer import TeacherCache
+
+        semantic_provider = TeacherCache(matching["semantic_teacher_cache"])
+    if (semantic_mode != "off" or matching.get("dynamic_mask")) and semantic_provider is None:
+        raise ValueError("Semantic features/masking require a standalone semantic provider")
+    matchability_provider = None
+    from underwater_vision.visibility.source import validate_source_images
+
+    visibility_cfg = validate_source_images(
+        cfg.get("visibility", {}), [f.name for f in frames], matching.get("evaluation_mode", True)
+    )
+    matchability_checkpoint = matching.get("matchability_checkpoint") or (
+        visibility_cfg.get("checkpoint") if visibility_cfg.get("source") == "matchability" else None
+    )
+    if matchability_checkpoint:
+        from underwater_vision.matchability.infer import MatchabilityPredictor
+
+        matchability_provider = MatchabilityPredictor(matchability_checkpoint)
+    matchability = matching.get("matchability_features", "off") == "on"
+    if matchability and matchability_provider is None:
+        raise ValueError("Matchability features require a standalone map provider")
+    predictor = MatchPredictor(
+        matching["filter_checkpoint"],
+        semantic_mode,
+        semantic_provider.checkpoint_hash if semantic_provider else None,
+        matchability,
+        matchability_provider.checkpoint_hash if matchability_provider else None,
+    )
+    if (
+        predictor.metadata.get("output_interpretation")
+        == "tight_geometry_ranking_score_not_calibrated_probability"
+        and matching.get("selection_policy") != "conservative_budget"
+    ):
+        raise ValueError("Tight-geometry ranker scores require conservative_budget selection")
     if (
         predictor.metadata["backbone"] != cfg["model"]["backbone"]
         or predictor.metadata["revision"] != cfg["model"]["revision"]
@@ -52,8 +92,23 @@ def execute_learned(cfg, output):
         raise ValueError("Filter backbone/revision mismatch")
     trained = set(predictor.metadata["training_images"] + predictor.metadata["validation_images"])
     evaluation_mode = matching.get("evaluation_mode", True)
+    if evaluation_mode and matchability_provider:
+        from underwater_vision.matchability.protocol import check_evaluation
+
+        check_evaluation(
+            matchability_provider.metadata,
+            [f.name for f in frames],
+            matchability_provider.metadata["spatial_split"],
+        )
     if evaluation_mode and any(f.name in trained for f in frames):
         raise ValueError("Filter training/validation image leakage")
+    if evaluation_mode and semantic_provider and hasattr(semantic_provider, "metadata"):
+        used = set(
+            semantic_provider.metadata.get("training_images", [])
+            + semantic_provider.metadata.get("validation_images", [])
+        )
+        if used & {f.name for f in frames}:
+            raise ValueError("Segmentation training/validation image leakage")
     for f in frames:
         if evaluation_mode and (
             f.reference_c2w is not None
@@ -74,10 +129,55 @@ def execute_learned(cfg, output):
         raise ValueError(
             "v1 filter requires its training preprocessing (960px, 4096 SIFT, no CLAHE)"
         )
+    endpoint_only = (
+        matching.get("selection_policy") == "conservative_budget"
+        and matching.get("ranking_source") == "matchability"
+        and not matchability
+    )
+    if cfg["model"].get("contrast_threshold", 0.04) != 0.04 and not endpoint_only:
+        raise ValueError("Existing v1 match filters require their training SIFT contrast threshold")
     features, manifest = {}, []
     image_dir = output / "images"
     for f in frames:
-        feat = feature_record(f, neural, data["max_size"], cfg["model"]["max_features"])
+        feat = feature_record(
+            f,
+            neural,
+            data["max_size"],
+            cfg["model"]["max_features"],
+            semantic_provider,
+            matchability_provider,
+            contrast_threshold=cfg["model"].get("contrast_threshold", 0.04),
+        )
+        if visibility_cfg.get("source"):
+            from underwater_vision.visibility.source import apply_source
+
+            feat = apply_source(feat, visibility_cfg["source"], visibility_cfg.get("checkpoint"))
+        if matching.get("keypoint_budget"):
+            from underwater_vision.matchability.infer import select_keypoints
+
+            source = matching.get("keypoint_selection", "matchability")
+            if source == "response":
+                import cv2
+
+                rgb, _ = resize_rgb(read_rgb(f.path), data["max_size"])
+                keypoints, _ = cv2.SIFT_create(
+                    nfeatures=cfg["model"]["max_features"]
+                ).detectAndCompute(cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), None)
+                if not np.array_equal(
+                    feat["xy"], np.asarray([k.pt for k in keypoints], np.float32)
+                ):
+                    raise ValueError("Response/keypoint alignment mismatch")
+                feat["response"] = np.asarray([k.response for k in keypoints], np.float32)
+            feat = select_keypoints(feat, matching["keypoint_budget"], source, cfg["seed"])
+        if matching.get("dynamic_mask"):
+            from underwater_vision.semantic.masks import mask_keypoints
+
+            threshold = matching.get("dynamic_threshold")
+            if threshold is None:
+                threshold = getattr(semantic_provider, "metadata", {}).get("dynamic_threshold")
+            if threshold is None:
+                raise ValueError("Masking threshold must be chosen on validation")
+            feat = mask_keypoints(feat, threshold)
         height, width = map(int, feat["shape"])
         K, distortion = camera_parameters(width, height, data["calibration"])
         feat["geometry_xy"] = undistort(feat["xy"], K, distortion)
@@ -87,14 +187,38 @@ def execute_learned(cfg, output):
         manifest.append({"name": f.name, "path": str(f.path.resolve())})
     write_json(output / "input_manifest.json", manifest)
     write_json(
-        output / "filter_provenance_v1.json",
+        output
+        / (
+            "filter_provenance_v3.json"
+            if output.name.endswith("_v3")
+            else "filter_provenance_v1.json"
+        ),
         {
             "architecture": predictor.metadata["architecture"],
             "sha256": hashlib.sha256(Path(matching["filter_checkpoint"]).read_bytes()).hexdigest(),
             "threshold": predictor.metadata["threshold"],
+            "selection_policy": matching.get("selection_policy", "threshold"),
+            "ranking_source": matching.get("ranking_source", "filter"),
+            "score_interpretation": (
+                "match_ranking_score_not_calibrated_probability"
+                if matching.get("selection_policy") == "conservative_budget"
+                else predictor.metadata.get("output_interpretation", "match_probability")
+            ),
+            "match_retention": matching.get("match_retention", 0.9),
+            "minimum_matches": matching.get("minimum_matches", 128),
             "label_source": predictor.metadata["labels"],
             "evaluation_mode": evaluation_mode,
             "training_or_validation_overlap": len({f.name for f in frames} & trained),
+            "semantic_features": semantic_mode,
+            "segmentation_hash": semantic_provider.checkpoint_hash if semantic_provider else None,
+            "dynamic_mask": matching.get("dynamic_mask", False),
+            "matchability_features": matchability,
+            "matchability_hash": (
+                matchability_provider.checkpoint_hash if matchability_provider else None
+            ),
+            "keypoint_budget": matching.get("keypoint_budget"),
+            "visibility_source": cfg.get("visibility", {}).get("source", "handcrafted"),
+            "visibility_checkpoint_sha256": visibility_cfg.get("checkpoint_sha256"),
         },
     )
     if cfg["stage"] == "features":
@@ -120,9 +244,37 @@ def execute_learned(cfg, output):
         a, b = frames[i].name, frames[j].name
         fa, fb = features[a], features[b]
         height, width = map(int, fa["shape"])
-        ids, x = candidates(fa, fb, width, height)
-        probability = predictor(x)
-        accepted = unique_matches(ids, probability, predictor.metadata["threshold"])
+        ids, x = candidates(fa, fb, width, height, semantic_mode, matchability)
+        probability = np.ones(len(x), np.float32) if endpoint_only else predictor(x)
+        policy = matching.get("selection_policy", "threshold")
+        if policy == "conservative_budget":
+            from underwater_vision.matching.budget import budget_indices, endpoint_ranking
+
+            source = matching.get("ranking_source", "filter")
+            ranking = probability
+            if source in {"matchability", "product"}:
+                if "matchability" not in fa or "matchability" not in fb:
+                    raise ValueError("Endpoint ranking requires a matchability provider")
+                ranking = endpoint_ranking(
+                    ids,
+                    fa["matchability"],
+                    fb["matchability"],
+                    probability if source == "product" else None,
+                )
+            elif source != "filter":
+                raise ValueError("Unknown learned ranking source")
+
+            accepted = budget_indices(
+                x,
+                ranking,
+                matching.get("match_retention", 0.9),
+                matching.get("minimum_matches", 128),
+            )
+            probability = ranking
+        elif policy == "threshold":
+            accepted = unique_matches(ids, probability, predictor.metadata["threshold"])
+        else:
+            raise ValueError("Unknown learned match selection policy")
         record = {
             "a": a,
             "b": b,
@@ -162,11 +314,39 @@ def execute_learned(cfg, output):
     from underwater_vision.visualization.figures import reconstruction_figure, trajectory_figure
 
     sparse_confidence(model, features, output, settings)
+    if settings.get("semantic_voting"):
+        if semantic_provider is None:
+            raise ValueError("Semantic voting requires per-view class probabilities")
+        from underwater_vision.semantic.voting import export_semantic_cloud
+
+        export_semantic_cloud(model, features, output)
+    if settings.get("semantic_confidence_checkpoint"):
+        from underwater_vision.semantic.experiments import export_semantic_confidence
+
+        export_semantic_confidence(
+            model,
+            features,
+            output,
+            settings["semantic_confidence_checkpoint"],
+            semantic_provider.checkpoint_hash,
+        )
     if settings.get("learned_confidence_checkpoint"):
         from underwater_vision.pointcloud.learned_confidence import export_learned_confidence
 
         export_learned_confidence(
             model, features, output, settings["learned_confidence_checkpoint"]
+        )
+    if settings.get("matchability_confidence_checkpoint"):
+        if matchability_provider is None:
+            raise ValueError("Point matchability prediction requires a map provider")
+        from underwater_vision.matchability.confidence import export_confidence
+
+        export_confidence(
+            model,
+            features,
+            output,
+            settings["matchability_confidence_checkpoint"],
+            matchability_provider.checkpoint_hash,
         )
     reconstruction_figure(model, output / "figures/reconstruction.png")
     trajectory_figure(poses, reference, output / "figures/trajectory.png")
