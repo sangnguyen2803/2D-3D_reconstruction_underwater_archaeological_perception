@@ -1,16 +1,21 @@
 """Global DINO retrieval and explicitly approximate reference co-frustum overlap."""
 
+from numbers import Integral
+
 import numpy as np
 
 
 def retrieve_pairs(descriptors, top_k=12, sequential_window=0):
+    for name, value in (("top_k", top_k), ("sequential_window", sequential_window)):
+        if not isinstance(value, Integral) or isinstance(value, bool) or value < 0:
+            raise ValueError(f"{name} must be a nonnegative integer")
     d = np.asarray(descriptors, np.float32)
     if d.ndim != 2 or not np.isfinite(d).all() or (np.linalg.norm(d, axis=1) < 1e-9).any():
         raise ValueError("Need finite nonzero global descriptors")
     d = d / np.linalg.norm(d, axis=1, keepdims=True)
     scores = d @ d.T
     np.fill_diagonal(scores, -np.inf)
-    k = min(top_k, len(d) - 1)
+    k = min(top_k, max(0, len(d) - 1))
     neighbors = np.argsort(-scores, axis=1, kind="stable")[:, :k]
     pairs = {tuple(sorted((i, int(j)))) for i, row in enumerate(neighbors) for j in row}
     pairs.update(
