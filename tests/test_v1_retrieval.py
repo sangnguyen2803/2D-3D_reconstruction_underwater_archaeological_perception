@@ -30,3 +30,22 @@ def test_zero_retrieval_budget_preserves_sequential_pairs():
     pairs, neighbors = retrieve_pairs(np.eye(4), top_k=0, sequential_window=1)
     assert pairs == [(0, 1), (1, 2), (2, 3)]
     assert neighbors.shape == (4, 0)
+
+
+def test_retrieval_is_invariant_to_extreme_descriptor_scales():
+    descriptors = np.random.default_rng(7).normal(size=(5, 8))
+    expected_pairs, expected_neighbors = retrieve_pairs(descriptors, top_k=2)
+    scales = np.array([1e-300, 1e-100, 1, 1e100, 1e300])[:, None]
+    with np.errstate(all="raise"):
+        pairs, neighbors = retrieve_pairs(descriptors * scales, top_k=2)
+    assert pairs == expected_pairs
+    np.testing.assert_array_equal(neighbors, expected_neighbors)
+
+
+@pytest.mark.parametrize(
+    "descriptors",
+    [np.zeros((2, 3)), np.ones((2, 0)), np.ones(3), [[np.nan]], [[np.inf]]],
+)
+def test_retrieval_rejects_invalid_descriptors(descriptors):
+    with pytest.raises(ValueError, match="finite nonzero global descriptors"):
+        retrieve_pairs(descriptors)

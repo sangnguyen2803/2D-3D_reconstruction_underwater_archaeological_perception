@@ -9,9 +9,14 @@ def retrieve_pairs(descriptors, top_k=12, sequential_window=0):
     for name, value in (("top_k", top_k), ("sequential_window", sequential_window)):
         if not isinstance(value, Integral) or isinstance(value, bool) or value < 0:
             raise ValueError(f"{name} must be a nonnegative integer")
-    d = np.asarray(descriptors, np.float32)
-    if d.ndim != 2 or not np.isfinite(d).all() or (np.linalg.norm(d, axis=1) < 1e-9).any():
+    d = np.asarray(descriptors, np.float64)
+    if d.ndim != 2 or d.shape[1] == 0 or not np.isfinite(d).all():
         raise ValueError("Need finite nonzero global descriptors")
+    # Scale before the L2 norm so very large or small descriptors retain their direction.
+    magnitude = np.max(np.abs(d), axis=1, keepdims=True)
+    if (magnitude == 0).any():
+        raise ValueError("Need finite nonzero global descriptors")
+    d = (d / magnitude).astype(np.float32)
     d = d / np.linalg.norm(d, axis=1, keepdims=True)
     scores = d @ d.T
     np.fill_diagonal(scores, -np.inf)
