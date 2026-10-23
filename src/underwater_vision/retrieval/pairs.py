@@ -63,6 +63,26 @@ def overlap_proxy(poses, K, width, height, depth, threshold=0.25):
 
 
 def retrieval_metrics(neighbors, truth, window=6):
+    """Evaluate distinct non-self neighbors; empty retrievals have zero precision."""
+    if not isinstance(window, Integral) or isinstance(window, bool) or window < 0:
+        raise ValueError("window must be a nonnegative integer")
+    neighbors, truth = np.asarray(neighbors), np.asarray(truth, dtype=bool)
+    if truth.ndim != 2 or truth.shape[0] != truth.shape[1]:
+        raise ValueError("truth must be a square matrix")
+    if (
+        neighbors.ndim != 2
+        or len(neighbors) != len(truth)
+        or not np.issubdtype(neighbors.dtype, np.integer)
+    ):
+        raise ValueError("neighbors must be an integer matrix with one row per query")
+    if ((neighbors < 0) | (neighbors >= len(truth))).any():
+        raise ValueError("Neighbor indices must be within the truth matrix")
+    if (neighbors == np.arange(len(neighbors))[:, None]).any() or (
+        np.diff(np.sort(neighbors, axis=1), axis=1) == 0
+    ).any():
+        raise ValueError("Neighbors must be distinct and exclude self matches")
+    if np.diag(truth).any():
+        raise ValueError("truth must exclude self matches")
     hits, positives, sequential_hits, long_hits, long_positives = 0, 0, 0, 0, 0
     precision = []
     for i, row in enumerate(neighbors):
@@ -75,14 +95,14 @@ def retrieval_metrics(neighbors, truth, window=6):
         positives += len(positive)
         long_hits += int(np.isin(row, long).sum())
         long_positives += len(long)
-        precision.append(float(truth[i, row].mean()))
+        precision.append(float(truth[i, row].mean()) if len(row) else 0.0)
     return {
         "queries": len(neighbors),
         "top_k": neighbors.shape[1],
         "directed_positive_pairs": positives,
         "recall": hits / max(positives, 1),
         "sequential_recall": sequential_hits / max(positives, 1),
-        "mean_precision": float(np.mean(precision)),
+        "mean_precision": float(np.mean(precision)) if precision else 0.0,
         "long_range_recall": long_hits / max(long_positives, 1),
         "long_range_positives": long_positives,
         "sequential_budget": 2 * window,

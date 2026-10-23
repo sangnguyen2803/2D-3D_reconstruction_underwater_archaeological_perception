@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from underwater_vision.retrieval.pairs import retrieve_pairs
+from underwater_vision.retrieval.pairs import retrieval_metrics, retrieve_pairs
 
 
 def test_retrieval_never_contains_self_pairs_or_duplicates():
@@ -49,3 +49,53 @@ def test_retrieval_is_invariant_to_extreme_descriptor_scales():
 def test_retrieval_rejects_invalid_descriptors(descriptors):
     with pytest.raises(ValueError, match="finite nonzero global descriptors"):
         retrieve_pairs(descriptors)
+
+
+@pytest.mark.parametrize("count", [0, 1, 3])
+def test_empty_retrieval_metrics_are_finite(count):
+    truth = ~np.eye(count, dtype=bool)
+    with np.errstate(all="raise"):
+        metrics = retrieval_metrics(np.empty((count, 0), dtype=int), truth)
+    assert metrics["queries"] == count
+    assert metrics["top_k"] == 0
+    assert metrics["mean_precision"] == 0
+    assert metrics["recall"] == 0
+    assert all(np.isfinite(value) for value in metrics.values() if isinstance(value, float))
+
+
+def test_retrieval_metrics_count_known_positive_pairs():
+    truth = np.zeros((4, 4), dtype=bool)
+    truth[0, 1] = truth[1, 0] = truth[2, 3] = truth[3, 2] = True
+    metrics = retrieval_metrics([[1], [0], [3], [2]], truth, window=0)
+    assert metrics["directed_positive_pairs"] == 4
+    assert metrics["recall"] == metrics["mean_precision"] == 1
+    assert metrics["long_range_recall"] == 1
+    assert metrics["sequential_recall"] == 0
+
+
+@pytest.mark.parametrize(
+    "neighbors",
+    [
+        [[1], [0]],
+        [[1.0], [0.0], [1.0]],
+        [[-1], [0], [1]],
+        [[3], [0], [1]],
+        [[0], [0], [1]],
+        [[1, 1], [0, 2], [0, 1]],
+    ],
+)
+def test_retrieval_metrics_reject_invalid_neighbors(neighbors):
+    with pytest.raises(ValueError):
+        retrieval_metrics(neighbors, ~np.eye(3, dtype=bool))
+
+
+@pytest.mark.parametrize("window", [-1, 1.5, True])
+def test_retrieval_metrics_reject_invalid_windows(window):
+    with pytest.raises(ValueError, match="window must be a nonnegative integer"):
+        retrieval_metrics([[1], [0]], ~np.eye(2, dtype=bool), window=window)
+
+
+@pytest.mark.parametrize("truth", [np.zeros((2, 3)), np.eye(2, dtype=bool)])
+def test_retrieval_metrics_reject_invalid_truth(truth):
+    with pytest.raises(ValueError, match="truth must"):
+        retrieval_metrics([[1], [0]], truth)
