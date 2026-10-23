@@ -43,6 +43,7 @@ def fingerprint(path, settings):
 def atomic_npz(path, **values):
     """Atomic shared-cache writes prevent a second process reading partial NPZ data."""
     path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.stem + "." + uuid.uuid4().hex + ".tmp.npz")
     try:
         np.savez_compressed(temporary, **values)
