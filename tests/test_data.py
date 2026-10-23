@@ -1,6 +1,8 @@
 from pathlib import Path
+from xml.etree import ElementTree
 
 import numpy as np
+import pytest
 
 from underwater_vision.data.dataset_loader import (
     Frame,
@@ -53,3 +55,36 @@ def test_loader_ignores_directories_with_image_extensions(tmp_path):
     image.write_bytes(b"image placeholder")
     dataset = MermaidDataset(tmp_path)
     assert [frame.path for frame in dataset.frames] == [image]
+
+
+def _write_reference_poses(path, cameras):
+    root = ElementTree.Element("camera_poses")
+    for label, transform in cameras:
+        camera = ElementTree.SubElement(root, "camera", {} if label is None else {"label": label})
+        ElementTree.SubElement(camera, "transform").text = " ".join(map(str, transform.ravel()))
+    ElementTree.ElementTree(root).write(path)
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf, -np.inf])
+def test_reference_poses_reject_nonfinite_translation(tmp_path, value):
+    transform = np.eye(4)
+    transform[0, 3] = value
+    path = tmp_path / "poses.xml"
+    _write_reference_poses(path, [("frame", transform)])
+    with pytest.raises(ValueError, match="must be finite"):
+        load_reference_poses(path)
+
+
+def test_reference_poses_reject_reflections(tmp_path):
+    path = tmp_path / "poses.xml"
+    _write_reference_poses(path, [("frame", np.diag([-1, 1, 1, 1]))])
+    with pytest.raises(ValueError, match="Invalid reference rotation"):
+        load_reference_poses(path)
+
+
+@pytest.mark.parametrize("label", [None, "", "frame"])
+def test_reference_poses_reject_missing_or_duplicate_labels(tmp_path, label):
+    path = tmp_path / "poses.xml"
+    _write_reference_poses(path, [("frame", np.eye(4)), (label, np.eye(4))])
+    with pytest.raises(ValueError, match="labels must be nonempty and unique"):
+        load_reference_poses(path)

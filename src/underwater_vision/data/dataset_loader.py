@@ -26,15 +26,23 @@ def natural_key(path):
 def load_reference_poses(path):
     result = {}
     for camera in ElementTree.parse(path).getroot().findall("camera"):
+        label = camera.get("label")
+        if not label or label in result:
+            raise ValueError("Reference camera labels must be nonempty and unique")
         values = np.fromstring(camera.findtext("transform", ""), sep=" ")
         if values.size != 16:
             raise ValueError(f"Invalid transform for {camera.attrib}")
         transform = values.reshape(4, 4)
+        if not np.isfinite(transform).all():
+            raise ValueError(f"Reference transform must be finite: {label}")
         if not np.allclose(transform[3], [0, 0, 0, 1]):
             raise ValueError("Invalid homogeneous transform")
-        if not np.allclose(transform[:3, :3].T @ transform[:3, :3], np.eye(3), atol=1e-5):
+        rotation = transform[:3, :3]
+        if not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-5) or not np.isclose(
+            np.linalg.det(rotation), 1, atol=1e-5
+        ):
             raise ValueError("Invalid reference rotation")
-        result[camera.attrib["label"]] = transform
+        result[label] = transform
     return result
 
 
