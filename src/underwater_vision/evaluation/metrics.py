@@ -63,8 +63,19 @@ def trajectory_metrics(estimated, reference):
 
 def dense_metrics(prediction, reference, thresholds=(0.01, 0.02, 0.05)):
     """Only call with independently measured, aligned surface reference geometry."""
-    if len(prediction) == 0 or len(reference) == 0:
+    prediction = np.asarray(prediction, dtype=np.float64)
+    reference = np.asarray(reference, dtype=np.float64)
+    if prediction.size == 0 or reference.size == 0:
         raise ValueError("Empty clouds cannot be evaluated")
+    for name, cloud in (("prediction", prediction), ("reference", reference)):
+        if cloud.ndim != 2 or cloud.shape[1] != 3:
+            raise ValueError(f"{name} must have shape (N, 3)")
+        if not np.isfinite(cloud).all():
+            raise ValueError(f"{name} points must be finite")
+    thresholds = tuple(thresholds)
+    values = np.asarray(thresholds, dtype=np.float64)
+    if values.ndim != 1 or not np.isfinite(values).all() or (values <= 0).any():
+        raise ValueError("thresholds must be finite positive distances")
     accuracy = cKDTree(reference).query(prediction)[0]
     completeness = cKDTree(prediction).query(reference)[0]
     result = {

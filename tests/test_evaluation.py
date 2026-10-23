@@ -78,3 +78,35 @@ def test_alignment_rejects_degenerate_source_or_target(side, degenerate):
 def test_alignment_rejects_insufficient_centers(count):
     with pytest.raises(ValueError, match="At least 3"):
         similarity_alignment(np.zeros((count, 3)), np.zeros((count, 3)))
+
+
+@pytest.mark.parametrize("side", ["prediction", "reference"])
+@pytest.mark.parametrize("shape", [(3,), (3, 2), (3, 3, 1)])
+def test_dense_metrics_reject_non_3d_clouds(side, shape):
+    clouds = {"prediction": np.eye(3), "reference": np.eye(3)}
+    clouds[side] = np.zeros(shape)
+    with pytest.raises(ValueError, match="must have shape"):
+        dense_metrics(**clouds)
+
+
+@pytest.mark.parametrize("side", ["prediction", "reference"])
+@pytest.mark.parametrize("value", [np.nan, np.inf, -np.inf])
+def test_dense_metrics_reject_nonfinite_points(side, value):
+    clouds = {"prediction": np.eye(3), "reference": np.eye(3)}
+    clouds[side][0, 0] = value
+    with pytest.raises(ValueError, match="points must be finite"):
+        dense_metrics(**clouds)
+
+
+@pytest.mark.parametrize("thresholds", [[0], [-0.1], [np.nan], [np.inf], [[0.1]]])
+def test_dense_metrics_reject_invalid_distance_thresholds(thresholds):
+    with pytest.raises(ValueError, match="thresholds must be finite positive distances"):
+        dense_metrics(np.eye(3), np.eye(3), thresholds=thresholds)
+
+
+def test_dense_metrics_known_distances_and_strict_threshold_boundary():
+    metrics = dense_metrics([[0, 0, 0], [1, 0, 0]], [[0, 0, 0], [2, 0, 0]], (0.5, 1, 1.01))
+    assert metrics["accuracy_mean"] == metrics["completeness_mean"] == 0.5
+    assert metrics["chamfer_l1"] == 1
+    assert metrics["fscore_0.5"] == metrics["fscore_1"] == 0.5
+    assert metrics["fscore_1.01"] == 1
