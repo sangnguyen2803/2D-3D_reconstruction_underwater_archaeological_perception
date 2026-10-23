@@ -48,7 +48,8 @@ class MermaidDataset:
             [
                 p
                 for p in folder.rglob("*")
-                if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+                if p.is_file()
+                and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
                 and not any(
                     part.startswith(".") or part == "__MACOSX"
                     for part in p.relative_to(folder).parts

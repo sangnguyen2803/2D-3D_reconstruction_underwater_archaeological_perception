@@ -44,3 +44,12 @@ def test_loader_excludes_macos_resource_forks(tmp_path):
     metadata.write_bytes(b"macOS metadata, not a JPEG")
     dataset = MermaidDataset(tmp_path)
     assert [frame.name for frame in dataset.frames] == ["frame_0001.JPG"]
+
+
+def test_loader_ignores_directories_with_image_extensions(tmp_path):
+    directory = tmp_path / "archive.jpg"
+    directory.mkdir()
+    image = directory / "frame_0001.JPG"
+    image.write_bytes(b"image placeholder")
+    dataset = MermaidDataset(tmp_path)
+    assert [frame.path for frame in dataset.frames] == [image]
