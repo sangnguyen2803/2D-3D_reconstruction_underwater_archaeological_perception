@@ -40,3 +40,41 @@ def test_dense_empty_and_identical():
         dense_metrics([], [])
     points = np.random.default_rng(5).normal(size=(30, 3))
     assert dense_metrics(points, points)["fscore_0.01"] == 1
+
+
+@pytest.mark.parametrize(
+    "source,target",
+    [
+        (np.zeros(3), np.zeros(3)),
+        (np.zeros((3, 2)), np.zeros((3, 2))),
+        (np.zeros((3, 3)), np.zeros((4, 3))),
+        (np.zeros((3, 3)), np.zeros((3, 3, 1))),
+    ],
+)
+def test_alignment_rejects_mismatched_or_non_3d_centers(source, target):
+    with pytest.raises(ValueError, match="matching shape"):
+        similarity_alignment(source, target)
+
+
+@pytest.mark.parametrize("side", ["source", "target"])
+@pytest.mark.parametrize("value", [np.nan, np.inf, -np.inf])
+def test_alignment_rejects_nonfinite_centers(side, value):
+    clouds = {"source": np.eye(3), "target": np.eye(3)}
+    clouds[side][0, 0] = value
+    with pytest.raises(ValueError, match="centers must be finite"):
+        similarity_alignment(**clouds)
+
+
+@pytest.mark.parametrize("side", ["source", "target"])
+@pytest.mark.parametrize("degenerate", [np.zeros((3, 3)), np.arange(9).reshape(3, 3)])
+def test_alignment_rejects_degenerate_source_or_target(side, degenerate):
+    clouds = {"source": np.eye(3), "target": np.eye(3)}
+    clouds[side] = degenerate
+    with pytest.raises(ValueError, match="non-collinear"):
+        similarity_alignment(**clouds)
+
+
+@pytest.mark.parametrize("count", [0, 1, 2])
+def test_alignment_rejects_insufficient_centers(count):
+    with pytest.raises(ValueError, match="At least 3"):
+        similarity_alignment(np.zeros((count, 3)), np.zeros((count, 3)))

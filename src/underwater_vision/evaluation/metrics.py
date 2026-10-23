@@ -5,10 +5,16 @@ from scipy.spatial.transform import Rotation
 
 def similarity_alignment(source, target):
     """Umeyama Sim(3) alignment; monocular reconstructions have unknown scale."""
-    source, target = np.asarray(source), np.asarray(target)
-    if len(source) < 3 or np.linalg.matrix_rank(source - source.mean(0)) < 2:
+    source, target = np.asarray(source, dtype=np.float64), np.asarray(target, dtype=np.float64)
+    if source.ndim != 2 or source.shape[1] != 3 or source.shape != target.shape:
+        raise ValueError("source and target must have matching shape (N, 3)")
+    if not np.isfinite(source).all() or not np.isfinite(target).all():
+        raise ValueError("Alignment centers must be finite")
+    if len(source) < 3:
         raise ValueError("At least 3 non-collinear centers required for alignment")
     a, b = source - source.mean(0), target - target.mean(0)
+    if np.linalg.matrix_rank(a) < 2 or np.linalg.matrix_rank(b) < 2:
+        raise ValueError("At least 3 non-collinear centers required for alignment")
     U, d, Vt = np.linalg.svd(b.T @ a / len(a))
     correction = np.eye(3)
     correction[-1, -1] = np.linalg.det(U @ Vt)
