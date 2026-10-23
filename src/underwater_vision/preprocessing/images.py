@@ -1,10 +1,17 @@
+from numbers import Integral
+
 import cv2
 
 
 def resize_rgb(image, max_size=960, enhance=False):
+    """Resize a nonempty RGB image, keeping each output dimension at least one pixel."""
+    if not isinstance(max_size, Integral) or isinstance(max_size, bool) or max_size < 1:
+        raise ValueError("max_size must be a positive integer")
+    if image.ndim != 3 or image.shape[2] != 3 or min(image.shape[:2]) < 1:
+        raise ValueError("Expected a nonempty RGB image with shape (height, width, 3)")
     h, w = image.shape[:2]
     scale = min(1.0, max_size / max(w, h))
-    width, height = round(w * scale), round(h * scale)
+    width, height = max(1, round(w * scale)), max(1, round(h * scale))
     result = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
     if enhance:
         lab = cv2.cvtColor(result, cv2.COLOR_RGB2LAB)
